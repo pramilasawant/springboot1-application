@@ -21,6 +21,12 @@ if ! [ -x "$(command -v mvn)" ]; then
   sudo apt-get install -y maven
 fi
 
+# Verify the presence of pom.xml
+if [ ! -f "pom.xml" ]; then
+  echo "Error: pom.xml file is missing in the directory $(pwd)"
+  exit 1
+fi
+
 # Clean and build the project
 mvn clean install
 
