@@ -5,23 +5,30 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhubpwd')
-        SLACK_CREDENTIALS = credentials('slackpwd')
+        DOCKERHUB_USERNAME = 'pramila188'
+        SLACK_CREDENTIALS = 'slackpwd'
     }
 
     stages {
+        stage('Cleanup Workspace') {
+            steps {
+                deleteDir() // Deletes all files in the workspace
+            }
+        }
+
         stage('Checkout Repositories') {
             parallel {
                 stage('Checkout Java Application') {
                     steps {
                         dir('java-app') {
-                            git 'https://github.com/pramilasawant/springboot1-application.git'
+                            git branch: 'main', url: 'https://github.com/pramilasawant/springboot1-application.git'
                         }
                     }
                 }
                 stage('Checkout Python Application') {
                     steps {
                         dir('python-app') {
-                            git 'https://github.com/pramilasawant/phython-application.git'
+                            git branch: 'main', url: 'https://github.com/pramilasawant/phython-application.git'
                         }
                     }
                 }
@@ -34,22 +41,22 @@ pipeline {
                     steps {
                         script {
                             dir('java-app') {
-                                sh 'mvn clean install'  // Ensure the Maven build is successful
-                                sh 'docker build -t pramila188/testhello:latest .'
-                                docker.withRegistry('https://index.docker.io/v1/', DOCKERHUB_CREDENTIALS) {
-                                    sh 'docker push pramila188/testhello:latest'
+                                docker.withRegistry('https://index.docker.io/v1/', 'dockerhubpwd') {
+                                    def javaImage = docker.build("${DOCKERHUB_USERNAME}/testhello:latest", '.')
+                                    javaImage.push()
                                 }
                             }
                         }
                     }
                 }
+
                 stage('Build and Push Python Application') {
                     steps {
                         script {
                             dir('python-app') {
-                                sh 'docker build -t pramila188/python-app:latest .'
-                                docker.withRegistry('https://index.docker.io/v1/', DOCKERHUB_CREDENTIALS) {
-                                    sh 'docker push pramila188/python-app:latest'
+                                docker.withRegistry('https://index.docker.io/v1/', 'dockerhubpwd') {
+                                    def pythonImage = docker.build("${DOCKERHUB_USERNAME}/python-app:latest", '.')
+                                    pythonImage.push()
                                 }
                             }
                         }
@@ -61,15 +68,13 @@ pipeline {
 
     post {
         always {
-            cleanWs()
+            cleanWs() // Clean workspace after build
+        }
+        success {
+            slackSend (color: '#00FF00', message: "Build succeeded: ${env.JOB_NAME} ${env.BUILD_NUMBER}", tokenCredentialId: SLACK_CREDENTIALS)
         }
         failure {
-            slackSend(
-                channel: '#build-failures',
-                color: '#FF0000',
-                message: "Build failed in ${env.JOB_NAME} - ${env.BUILD_NUMBER}. Check Jenkins for details.",
-                tokenCredentialId: 'slackpwd'
-            )
+            slackSend (color: '#FF0000', message: "Build failed: ${env.JOB_NAME} ${env.BUILD_NUMBER}", tokenCredentialId: SLACK_CREDENTIALS)
         }
     }
 }
